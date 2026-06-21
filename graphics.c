@@ -2090,7 +2090,8 @@ Pixmap gr_load_pixmap(ImagePlacement *placement, int frameidx, int cw, int ch) {
 
 /// Creates a temporary directory.
 static int gr_create_cache_dir() {
-	strncpy(cache_dir, graphics_cache_dir_template, sizeof(cache_dir));
+	strncpy(cache_dir, graphics_cache_dir_template, sizeof(cache_dir) - 1);
+	cache_dir[sizeof(cache_dir) - 1] = '\0';
 	if (!mkdtemp(cache_dir)) {
 		fprintf(stderr,
 			"error: could not create temporary dir from template "
@@ -3002,7 +3003,8 @@ static void sanitize_str(char *str, size_t max_size) {
 /// careful.
 static const char *sanitized_filename(const char *str) {
 	static char buf[MAX_FILENAME_SIZE];
-	strncpy(buf, str, sizeof(buf));
+	strncpy(buf, str, sizeof(buf) - 1);
+	buf[sizeof(buf) - 1] = '\0';
 	sanitize_str(buf, sizeof(buf));
 	return buf;
 }

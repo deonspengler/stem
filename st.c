@@ -3459,7 +3459,7 @@ void set_notifmode(int type, KeySym ksym) {
 		memcpy(g, term.line[bot], col * sizeof(Glyph));
 
 	}
-	else if ( ksym == -2 )
+	else if ( ksym == -2 && g )
 		memcpy(term.line[bot], g, col * sizeof(Glyph));
 
 	if ( type < 2 ) {
@@ -3469,8 +3469,10 @@ void set_notifmode(int type, KeySym ksym) {
 				deb->u = *z,
 				deb->fg = defaultfg, deb->bg = defaultbg;
 	}
-	else if ( type < 5 )
-		memcpy(term.line[bot], g, col * sizeof(Glyph));
+	else if ( type < 5 ) {
+		if ( g )
+			memcpy(term.line[bot], g, col * sizeof(Glyph));
+	}
 	else {
 		for (deb = &term.line[bot][0], fin = &term.line[bot][col]; deb < fin; deb++)
 			deb->mode = ATTR_REVERSE,
