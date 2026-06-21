@@ -1520,8 +1520,13 @@ static int gr_load_raw_pixel_data_compressed(DATA32 *data, FILE *file,
 		// If we don't have enough data in the input buffer, try to read
 		// from the file.
 		if (strm.avail_in <= COMPRESSED_CHUNK_SIZE / 4) {
-			// Move the existing data to the beginning.
-			memmove(compressed_chunk, strm.next_in, strm.avail_in);
+			// Move the existing data to the beginning. On the
+			// first pass next_in is NULL and avail_in is 0;
+			// passing NULL to memmove is undefined behavior, so
+			// guard the call.
+			if (strm.avail_in)
+				memmove(compressed_chunk, strm.next_in,
+					strm.avail_in);
 			strm.next_in = compressed_chunk;
 			// Read more data.
 			size_t bytes_read = fread(
@@ -1591,7 +1596,8 @@ static int gr_load_raw_pixel_data_compressed(DATA32 *data, FILE *file,
 /// may be compressed.
 static Imlib_Image gr_load_raw_pixel_data(ImageFrame *frame,
 					  const char *filename) {
-	size_t total_pixels = frame->data_pix_width * frame->data_pix_height;
+	size_t total_pixels =
+		(size_t)frame->data_pix_width * frame->data_pix_height;
 	if (total_pixels * 4 > graphics_max_single_image_ram_size) {
 		fprintf(stderr,
 			"error: image %u frame %u is too big too load: %zu > %u\n",
@@ -3447,7 +3453,7 @@ static ImageFrame *gr_new_image_or_frame_from_command(GraphicsCommand *cmd) {
 	// compression. This is required for the shared memory transmission.
 	if (!frame->expected_size && !frame->compression &&
 	    (frame->format == 24 || frame->format == 32)) {
-		frame->expected_size = frame->data_pix_width *
+		frame->expected_size = (size_t)frame->data_pix_width *
 				       frame->data_pix_height *
 				       (frame->format / 8);
 	}
