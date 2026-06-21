@@ -1,0 +1,32 @@
+From: <you>
+Subject: [PATCH] graphics: make gr_deinit() idempotent (fix double free on WM close)
+
+gr_deinit() is registered via atexit() in gr_init() AND called explicitly
+from the WM-delete path in x.c (xclient -> ttyhangup -> gr_deinit -> exit).
+So closing the window runs it twice: exit(0) re-invokes it through atexit.
+
+The images half is already double-call safe (guarded by `images` and nulled),
+but kv_destroy(next_redraw_times) is `free((v).a)` with no null afterward, so
+the second call frees the same block again:
+
+    free(): double free detected in tcache 2
+
+Guard the whole function with a one-shot static flag so it is safe regardless
+of how many entry points invoke it. (Exiting the shell normally only triggers
+the atexit path once, which is why this only showed up on window close.)
+---
+--- a/graphics.c
++++ b/graphics.c
+@@ -2146,6 +2146,12 @@
+ 
+ /// Deinitialize the graphics module.
+ void gr_deinit() {
++	// gr_deinit may be called both explicitly (e.g. on WM close) and again
++	// via atexit() during exit(); guard so the frees below run only once.
++	static int deinitialized = 0;
++	if (deinitialized)
++		return;
++	deinitialized = 1;
+ 	// Remove the cache dir.
+ 	remove(cache_dir);
+ 	kv_destroy(next_redraw_times);

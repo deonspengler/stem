@@ -1,0 +1,19 @@
+--- a/graphics.c
++++ b/graphics.c
+@@ -4373,12 +4373,10 @@
+ 	size_t in_len = strlen(src);
+ 	char *result, *dst;
+ 
+-	result = dst = malloc((in_len + 3) / 4 * 3 + 1);
+-	if (!result) {
+-		if (size)
+-			*size = 0;
+-		return NULL;
+-	}
++	/* Use st's xmalloc so an allocation failure dies cleanly, consistent
++	 * with the rest of the codebase. This makes the NULL return impossible,
++	 * so callers don't need to guard against it. */
++	result = dst = xmalloc((in_len + 3) / 4 * 3 + 1);
+ 	while (*src) {
+ 		int a = gr_base64_digits[(unsigned char)gr_base64_getc(&src)];
+ 		int b = gr_base64_digits[(unsigned char)gr_base64_getc(&src)];

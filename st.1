@@ -1,0 +1,305 @@
+.TH ST 1 st\-VERSION
+.SH NAME
+st \- simple terminal
+.SH SYNOPSIS
+.B st
+.RB [ \-aiv ]
+.RB [ \-A
+.IR alpha ]
+.RB [ \-c
+.IR class ]
+.RB [ \-f
+.IR font ]
+.RB [ \-g
+.IR geometry ]
+.RB [ \-n
+.IR name ]
+.RB [ \-o
+.IR iofile ]
+.RB [ \-T
+.IR title ]
+.RB [ \-t
+.IR title ]
+.RB [ \-l
+.IR line ]
+.RB [ \-w
+.IR windowid ]
+.RB [[ \-e ]
+.IR command
+.RI [ arguments ...]]
+.PP
+.B st
+.RB [ \-aiv ]
+.RB [ \-A
+.IR alpha ]
+.RB [ \-c
+.IR class ]
+.RB [ \-f
+.IR font ]
+.RB [ \-g
+.IR geometry ]
+.RB [ \-n
+.IR name ]
+.RB [ \-o
+.IR iofile ]
+.RB [ \-T
+.IR title ]
+.RB [ \-t
+.IR title ]
+.RB [ \-w
+.IR windowid ]
+.RB \-l
+.IR line
+.RI [ stty_args ...]
+.SH DESCRIPTION
+.B st
+is a simple terminal emulator.
+.SH OPTIONS
+.TP
+.B \-a
+disable alternate screens in terminal
+.TP
+.BI \-A " alpha"
+set the background opacity (alpha) to a value between 0.0 (fully transparent)
+and 1.0 (fully opaque). The default is 0.8.
+.TP
+.BI \-c " class"
+defines the window class (default $TERM).
+.TP
+.BI \-f " font"
+defines the
+.I font
+to use when st is run.
+.TP
+.BI \-g " geometry"
+defines the X11 geometry string.
+The form is [=][<cols>{xX}<rows>][{+-}<xoffset>{+-}<yoffset>]. See
+.BR XParseGeometry (3)
+for further details.
+.TP
+.B \-i
+will fixate the position given with the -g option.
+.TP
+.BI \-n " name"
+defines the window instance name (default $TERM).
+.TP
+.BI \-o " iofile"
+writes all the I/O to
+.I iofile.
+This feature is useful when recording st sessions. A value of "-" means
+standard output.
+.TP
+.BI \-T " title"
+defines the window title (default 'st').
+.TP
+.BI \-t " title"
+defines the window title (default 'st').
+.TP
+.BI \-w " windowid"
+embeds st within the window identified by
+.I windowid
+.TP
+.BI \-l " line"
+use a tty
+.I line
+instead of a pseudo terminal.
+.I line
+should be a (pseudo-)serial device (e.g. /dev/ttyS0 on Linux for serial port
+0).
+When this flag is given
+remaining arguments are used as flags for
+.BR stty(1).
+By default st initializes the serial line to 8 bits, no parity, 1 stop bit
+and a 38400 baud rate. The speed is set by appending it as last argument
+(e.g. 'st -l /dev/ttyS0 115200'). Arguments before the last one are
+.BR stty(1)
+flags. If you want to set odd parity on 115200 baud use for example 'st -l
+/dev/ttyS0 parenb parodd 115200'. Set the number of bits by using for
+example 'st -l /dev/ttyS0 cs7 115200'. See
+.BR stty(1)
+for more arguments and cases.
+.TP
+.B \-v
+prints version information to stderr, then exits.
+.TP
+.BI \-e " command " [ " arguments " "... ]"
+st executes
+.I command
+instead of the shell.  If this is used it
+.B must be the last option
+on the command line, as in xterm / rxvt.
+This option is only intended for compatibility,
+and all the remaining arguments are used as a command
+even without it.
+.SH SHORTCUTS
+.TP
+.B Break
+Send a break in the serial line.
+Break key is obtained in PC keyboards
+pressing at the same time control and pause.
+.TP
+.B Ctrl-Print Screen
+Toggle if st should print to the
+.I iofile.
+.TP
+.B Shift-Print Screen
+Print the full screen to the
+.I iofile.
+.TP
+.B Print Screen
+Print the selection to the
+.I iofile.
+.SS Clipboard
+.TP
+.B Ctrl-Shift-c
+Copy the selected text to the clipboard selection.
+.TP
+.B Ctrl-Shift-v
+Paste from the clipboard selection.
+.TP
+.B Ctrl-Shift-y
+Paste from primary selection (middle mouse button).
+.SS Font
+.TP
+.B Ctrl-Shift-Page Up
+Increase font size.
+.TP
+.B Ctrl-Shift-Page Down
+Decrease font size.
+.TP
+.B Ctrl-Shift-Home
+Reset to default font size.
+.SS Alpha Transparency
+.TP
+.B Ctrl-Shift-o
+Increase background opacity by 0.05.
+.TP
+.B Ctrl-Shift-p
+Decrease background opacity by 0.05.
+.TP
+.B Ctrl-Shift-r
+Reset background opacity to the default value (or the value given with
+.BR \-A ).
+.SS Scrollback
+.TP
+.B Shift-Page Up
+Scroll up through terminal history (full page).
+.TP
+.B Shift-Page Down
+Scroll down through terminal history (full page).
+.TP
+.B Mouse Scroll Wheel
+Scroll up/down through terminal history (line by line).
+.SS Keyboard Selection Mode
+.TP
+.B Ctrl-Shift-Escape
+Enter keyboard selection mode. In this mode the terminal cursor can be
+moved freely using the following vi-like keys:
+.RS
+.TP
+.B h, j, k, l
+Move cursor left, down, up, or right. A numeric prefix (0\-9) may be
+given to repeat the motion.
+.TP
+.B 0 (zero) / Backspace
+Move cursor to the beginning of the line.
+.TP
+.B $
+Move cursor to the end of the line.
+.TP
+.B Home
+Move cursor to the top-left corner of the screen.
+.TP
+.B End
+Move cursor back to the original position.
+.TP
+.B Page Up / Page Down
+Jump to the top / bottom of the screen.
+.TP
+.B !
+Move cursor to the middle column.
+.TP
+.B *
+Move cursor to the center of the screen.
+.TP
+.B s
+Toggle selection. Press once to start selecting, press again to clear.
+.TP
+.B t
+Toggle selection type between regular and rectangular (block) selection.
+.TP
+.B / (slash)
+Search forward.
+.TP
+.B ? (question mark)
+Search backward.
+.TP
+.B n / N
+Repeat search in the same / opposite direction.
+.TP
+.B Return
+Confirm selection and exit keyboard selection mode.
+.TP
+.B Escape
+Cancel selection and exit keyboard selection mode.
+.RE
+.SS Inline Images
+.TP
+.B Ctrl-Shift-F7
+Unload all currently displayed inline images from memory.
+.TP
+.B Ctrl-Shift-F8
+Toggle inline image display on or off.
+.TP
+.B Ctrl-Shift-Right Click
+Preview the image under the cursor with an external viewer (feh).
+.TP
+.B Ctrl-Shift-Middle Click
+Display information about the image under the cursor.
+.SH CUSTOMIZATION
+.B st
+can read settings from X resources at startup via the
+.B Xresources
+patch. The following resources are supported under the
+.B st
+or
+.B St
+class (e.g. in
+.IR ~/.Xresources ):
+.PP
+.nf
+st.font          \- font name (string)
+st.color0\-15     \- terminal colors 0 through 15 (string)
+st.background    \- background color (string)
+st.foreground    \- foreground color (string)
+st.cursorColor   \- cursor color (string)
+st.termname      \- terminal name, e.g. st\-256color (string)
+st.shell         \- shell to execute (string)
+st.borderpx      \- border pixels (integer)
+st.tabspaces     \- tab width in spaces (integer)
+st.minlatency    \- minimum draw latency in ms (integer)
+st.maxlatency    \- maximum draw latency in ms (integer)
+st.blinktimeout  \- cursor blink timeout in ms (integer)
+st.bellvolume    \- bell volume (integer)
+st.cwscale       \- character width scale (float)
+st.chscale       \- character height scale (float)
+st.alpha         \- background opacity, 0.0 to 1.0 (float)
+.fi
+.PP
+After editing
+.IR ~/.Xresources ,
+run
+.B xrdb \-merge ~/.Xresources
+and restart st for the changes to take effect.
+.SH AUTHORS
+See the LICENSE file for the authors.
+.SH LICENSE
+See the LICENSE file for the terms of redistribution.
+.SH SEE ALSO
+.BR tabbed (1),
+.BR utmp (1),
+.BR stty (1),
+.BR scroll (1)
+.SH BUGS
+See the TODO file in the distribution.
+

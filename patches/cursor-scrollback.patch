@@ -1,0 +1,16 @@
+--- a/st.c	2026-06-20 23:29:45.522250260 +0000
++++ b/st.c	2026-06-20 23:29:45.532276174 +0000
+@@ -3419,8 +3419,11 @@
+ 		cx--;
+ 
+ 	drawregion(0, 0, term.col, term.row);
+-	xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
+-			term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
++	/* Only draw the cursor at the live view; when scrolled into history
++	 * (term.scr != 0) drawing it would paint over scrolled-back text/images. */
++	if (term.scr == 0)
++		xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
++				term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
+ 	term.ocx = cx;
+ 	term.ocy = term.c.y;
+ 	xfinishdraw();

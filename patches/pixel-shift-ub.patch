@@ -1,0 +1,31 @@
+--- a/x.c	2026-06-20 23:26:15.387513686 +0000
++++ b/x.c	2026-06-20 23:26:19.798021876 +0000
+@@ -898,7 +898,7 @@
+ {
+ 	dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * alpha);
+ 	dc.col[defaultbg].pixel &= 0x00FFFFFF;
+-	dc.col[defaultbg].pixel |= (unsigned char)(0xff * alpha) << 24;
++	dc.col[defaultbg].pixel |= (uint32_t)(unsigned char)(0xff * alpha) << 24;
+ }
+ 
+ void
+@@ -1720,7 +1720,7 @@
+ 		decor = dc.col[decorcolor];
+ 	}
+ 	decor.color.alpha = 0xffff;
+-	decor.pixel |= 0xff << 24;
++	decor.pixel |= (uint32_t)0xffU << 24;
+ 
+ 	/* Float thickness, used as a base to compute other values. */
+ 	float fthick = dc.font.height / 18.0;
+--- a/graphics.c	2026-06-20 23:26:15.387603526 +0000
++++ b/graphics.c	2026-06-20 23:26:19.813250459 +0000
+@@ -1840,7 +1840,7 @@
+ 			unsigned char b = (pixel & 0xFF) * a / 255;
+ 			unsigned char g = ((pixel >> 8) & 0xFF) * a / 255;
+ 			unsigned char r = ((pixel >> 16) & 0xFF) * a / 255;
+-			data[i] = (a << 24) | (r << 16) | (g << 8) | b;
++			data[i] = ((DATA32)a << 24) | (r << 16) | (g << 8) | b;
+ 		}
+ 	}
+ }
