@@ -630,7 +630,7 @@ Glyph *gr_get_glyph_underneath_image(uint32_t image_id, uint32_t placement_id,
 /// "/tmp/st-images-xxx/img-ID-FRAME".
 static void gr_get_frame_filename(ImageFrame *frame, char *out,
 				  size_t max_len) {
-	snprintf(out, max_len, "%s/img-%.3u-%.3u", cache_dir,
+	snprintf(out, max_len, "%s/img-%.3u-%.3d", cache_dir,
 		 frame->image->image_id, frame->index);
 }
 
@@ -672,7 +672,7 @@ static void gr_unload_frame(ImageFrame *frame) {
 	imlib_free_image_and_decache();
 	frame->imlib_object = NULL;
 
-	GR_LOG("After unloading image %u frame %u (atime %ld ms ago) "
+	GR_LOG("After unloading image %u frame %d (atime %ld ms ago) "
 	       "ram: %ld KiB  (- %u KiB)\n",
 	       frame->image->image_id, frame->index,
 	       drawing_start_time - frame->atime, images_ram_size / 1024,
@@ -723,7 +723,7 @@ static void gr_unload_pixmap(ImagePlacement *placement, int frameidx) {
 
 	GR_LOG("After unloading pixmap %ld of "
 	       "placement %u/%u (atime %ld ms ago) "
-	       "frame %u (atime %ld ms ago) "
+	       "frame %d (atime %ld ms ago) "
 	       "ram: %ld KiB  (- %u KiB)\n",
 	       pixmap, placement->image->image_id, placement->placement_id,
 	       drawing_start_time - placement->atime, frameidx,
@@ -759,7 +759,7 @@ static void gr_delete_imagefile(ImageFrame *frame) {
 	frame->image->total_disk_size -= disk_size;
 	frame->disk_size = 0;
 
-	GR_LOG("After deleting image file %u frame %u (atime %ld ms ago) "
+	GR_LOG("After deleting image file %u frame %d (atime %ld ms ago) "
 	       "disk: %ld KiB  (- %u KiB)\n",
 	       frame->image->image_id, frame->index,
 	       drawing_start_time - frame->atime, images_disk_size / 1024,
@@ -1041,8 +1041,7 @@ static void gr_update_frame_index(Image *img, Milliseconds now) {
 	}
 	// If the animation is stopped, show the current frame.
 	if (!img->animation_state ||
-	    img->animation_state == ANIMATION_STATE_STOPPED ||
-	    img->animation_state == ANIMATION_STATE_UNSET) {
+	    img->animation_state == ANIMATION_STATE_STOPPED) {
 		// The next redraw is never (unless the state is changed).
 		img->next_redraw = 0;
 		return;
@@ -1291,7 +1290,6 @@ gr_unloadable_object_for_pixmap(Milliseconds now, ImageFrame *frame,
 	UnloadableObject obj = {0};
 	obj.frameidx = frame->index;
 	obj.placement = placement;
-	obj.score = placement->atime;
 	// Since we don't store pixmap atimes, use the
 	// oldest atime of the frame and the placement.
 	Milliseconds atime = MIN(placement->atime, frame->atime);
@@ -1365,7 +1363,7 @@ static void gr_check_limits() {
 	char changed = 0;
 	// First reduce the number of images if there are too many.
 	if (kh_size(images) > apply_tolerance(graphics_max_total_placements)) {
-		GR_LOG("Too many images: %d\n", kh_size(images));
+		GR_LOG("Too many images: %u\n", kh_size(images));
 		changed = 1;
 		images_sorted = gr_get_images_sorted_by_atime();
 		int to_delete = kv_size(images_sorted) -
@@ -1376,7 +1374,7 @@ static void gr_check_limits() {
 	// Then reduce the number of placements if there are too many.
 	if (total_placement_count >
 	    apply_tolerance(graphics_max_total_placements)) {
-		GR_LOG("Too many placements: %d\n", total_placement_count);
+		GR_LOG("Too many placements: %u\n", total_placement_count);
 		changed = 1;
 		placements_sorted = gr_get_placements_sorted_by_atime();
 		int to_delete = kv_size(placements_sorted) -
@@ -1406,7 +1404,6 @@ static void gr_check_limits() {
 	// Then unload images from RAM.
 	if (images_ram_size > apply_tolerance(graphics_max_total_ram_size)) {
 		changed = 1;
-		int frames_begin = 0;
 		GR_LOG("Too much ram: %ld KiB\n", images_ram_size / 1024);
 		objects_sorted = gr_get_unloadable_objects_sorted_by_score(now);
 		for (int i = 0; i < kv_size(objects_sorted); i++) {
@@ -1418,7 +1415,7 @@ static void gr_check_limits() {
 	if (changed) {
 		Milliseconds end = gr_now_ms();
 		GR_LOG("After cleaning:  ram: %ld KiB  disk: %ld KiB  "
-		       "img count: %d  placement count: %d  Took %ld ms\n",
+		       "img count: %u  placement count: %u  Took %ld ms\n",
 		       images_ram_size / 1024, images_disk_size / 1024,
 		       kh_size(images), total_placement_count, end - now);
 	}
@@ -1479,7 +1476,6 @@ static void gr_load_raw_pixel_data_uncompressed(DATA32 *data, FILE *file,
 	size_t pixel_size = format == 24 ? 3 : 4;
 	size_t chunk_size_pix = BUFSIZ / 4;
 	size_t chunk_size_bytes = chunk_size_pix * pixel_size;
-	size_t bytes = total_pixels * pixel_size;
 	for (size_t chunk_start_pix = 0; chunk_start_pix < total_pixels;
 	     chunk_start_pix += chunk_size_pix) {
 		size_t read_size = fread(chunk, 1, chunk_size_bytes, file);
@@ -1600,7 +1596,7 @@ static Imlib_Image gr_load_raw_pixel_data(ImageFrame *frame,
 		(size_t)frame->data_pix_width * frame->data_pix_height;
 	if (total_pixels * 4 > graphics_max_single_image_ram_size) {
 		fprintf(stderr,
-			"error: image %u frame %u is too big too load: %zu > %u\n",
+			"error: image %u frame %d is too big too load: %zu > %u\n",
 			frame->image->image_id, frame->index, total_pixels * 4,
 			graphics_max_single_image_ram_size);
 		return NULL;
@@ -1668,7 +1664,7 @@ static void gr_load_imlib_object(ImageFrame *frame) {
 		if (frame->status != STATUS_RAM_LOADING_ERROR &&
 		    frame->status >= STATUS_UPLOADING_SUCCESS) {
 			fprintf(stderr,
-				"error: cached image was deleted: %u frame %u\n",
+				"error: cached image was deleted: %u frame %d\n",
 				frame->image->image_id, frame->index);
 		}
 		frame->status = STATUS_RAM_LOADING_ERROR;
@@ -1680,7 +1676,7 @@ static void gr_load_imlib_object(ImageFrame *frame) {
 		if (frame->status != STATUS_RAM_LOADING_ERROR) {
 			fprintf(stderr,
 				"error: recursive loading of image %u frame "
-				"%u\n",
+				"%d\n",
 				frame->image->image_id, frame->index);
 		}
 		frame->status = STATUS_RAM_LOADING_ERROR;
@@ -1753,7 +1749,7 @@ static void gr_load_imlib_object(ImageFrame *frame) {
 	    graphics_max_single_image_ram_size) {
 		if (frame->status != STATUS_RAM_LOADING_ERROR) {
 			fprintf(stderr,
-				"error: image %u frame %u is too big too load: "
+				"error: image %u frame %d is too big too load: "
 				"%d x %d * 4 = %d > %u\n",
 				frame->image->image_id, frame->index,
 				frame_data_width, frame_data_height,
@@ -1888,7 +1884,7 @@ void gr_compute_pixmap_transformation(ImagePlacement *placement) {
 		if (mode != SCALE_MODE_CONTAIN &&
 		    mode != SCALE_MODE_NONE_OR_CONTAIN) {
 			fprintf(stderr,
-				"warning: unknown scale mode %u, using "
+				"warning: unknown scale mode %d, using "
 				"'contain' instead\n",
 				mode);
 		}
@@ -1997,7 +1993,7 @@ Pixmap gr_load_pixmap(ImagePlacement *placement, int frameidx, int cw, int ch) {
 	if (pixmap)
 		return pixmap;
 
-	GR_LOG("Loading placement: %u/%u frame %u\n", img->image_id,
+	GR_LOG("Loading placement: %u/%u frame %d\n", img->image_id,
 	       placement->placement_id, frameidx);
 
 	if (placement->pixmap_transformation.pixmap_w == 0 ||
@@ -2009,7 +2005,7 @@ Pixmap gr_load_pixmap(ImagePlacement *placement, int frameidx, int cw, int ch) {
 	// Load the imlib object for the frame.
 	if (!frame) {
 		fprintf(stderr,
-			"error: could not find frame %u for image %u\n",
+			"error: could not find frame %d for image %u\n",
 			frameidx, img->image_id);
 		return 0;
 	}
@@ -2033,8 +2029,6 @@ Pixmap gr_load_pixmap(ImagePlacement *placement, int frameidx, int cw, int ch) {
 
 	// Upload the image to the X server.
 	Display *disp = imlib_context_get_display();
-	Visual *vis = imlib_context_get_visual();
-	Colormap cmap = imlib_context_get_colormap();
 	Drawable drawable = imlib_context_get_drawable();
 	if (!drawable)
 		drawable = DefaultRootWindow(disp);
@@ -2342,8 +2336,6 @@ void gr_dump_state() {
 	fprintf_ind(file, ind, "Estimated Disk usage: %ld KiB\n",
 		images_disk_size / 1024);
 
-	Milliseconds now = gr_now_ms();
-
 	int64_t images_ram_size_computed = 0;
 	int64_t images_disk_size_computed = 0;
 
@@ -2459,7 +2451,7 @@ void gr_show_image_info(uint32_t image_id, uint32_t placement_id,
 	// Basic information about the cell.
 	fprintf(file, "image_id = %u = 0x%08X\n", image_id, image_id);
 	fprintf(file, "placement_id = %u = 0x%08X\n", placement_id, placement_id);
-	fprintf(file, "column = %d, row = %d\n", imgcol, imgrow);
+	fprintf(file, "column = %u, row = %u\n", imgcol, imgrow);
 	fprintf(file, "classic/unicode placeholder = %s\n",
 		is_classic_placeholder ? "classic" : "unicode");
 	fprintf(file, "original diacritic count = %d\n", diacritic_count);
@@ -2508,7 +2500,6 @@ void gr_show_image_info(uint32_t image_id, uint32_t placement_id,
 /// Displays debug information in the rectangle using colors col1 and col2.
 static void gr_displayinfo(Drawable buf, ImageRect *rect, int col1, int col2,
 			   const char *message) {
-	int w_pix = (rect->img_end_col - rect->img_start_col) * rect->cw;
 	int h_pix = (rect->img_end_row - rect->img_start_row) * rect->ch;
 	Display *disp = imlib_context_get_display();
 	GC gc = XCreateGC(disp, buf, 0, NULL);
@@ -2581,7 +2572,6 @@ static void gr_drawimagerect(Drawable buf, ImageRect *rect) {
 		// This is the first time we draw this image in this redraw
 		// cycle. Update the frame index we are going to display. Note
 		// that currently all image placements are synchronized.
-		int old_frame = img->current_frame;
 		gr_update_frame_index(img, drawing_start_time);
 		img->last_redraw = drawing_start_time;
 	}
@@ -2788,7 +2778,7 @@ void gr_finish_drawing(Drawable buf) {
 		char info[MAX_INFO_LEN];
 		snprintf(info, MAX_INFO_LEN,
 			 "%sRender time: %d ms  ram %ld K  disk %ld K  count "
-			 "%d  cell %dx%d  delay %d",
+			 "%u  cell %dx%d  delay %d",
 			 debug_mode_str, milliseconds, images_ram_size / 1024,
 			 images_disk_size / 1024, kh_size(images), current_cw,
 			 current_ch, redraw_delay);
@@ -3208,7 +3198,7 @@ static void gr_set_current_upload_frame(ImageFrame *frame) {
 		current_upload_image_id = frame->image->image_id;
 		current_upload_frame_index = frame->index;
 		GR_LOG("Set current_upload_image_id = %u, "
-		       "current_upload_frame_index = %u\n",
+		       "current_upload_frame_index = %d\n",
 		       current_upload_image_id, current_upload_frame_index);
 	} else {
 		gr_close_current_upload_file();
@@ -3351,7 +3341,6 @@ static void gr_append_data(ImageFrame *frame, const char *payload, int more) {
 	if (!more) {
 		gr_set_current_upload_frame(NULL);
 		frame->status = STATUS_UPLOADING_SUCCESS;
-		uint32_t placement_id = frame->image->default_placement;
 		if (frame->expected_size &&
 		    frame->expected_size != frame->disk_size) {
 			// Report failure if the uploaded image size doesn't
@@ -3690,9 +3679,8 @@ static ImageFrame *gr_handle_transmit_command(GraphicsCommand *cmd) {
 		free(original_filename);
 		// The offset we pass to mmap must be a multiple of the page
 		// size. If it's not, adjust it and the size.
-		size_t page_size = sysconf(_SC_PAGESIZE);
-		if (page_size == -1)
-			page_size = 1;
+		long page_size_ret = sysconf(_SC_PAGESIZE);
+		size_t page_size = (page_size_ret <= 0) ? 1 : (size_t)page_size_ret;
 		size_t offset = cmd->offset - (cmd->offset % page_size);
 		size_t size = frame->expected_size + (cmd->offset - offset);
 		// Map the shared memory object.
@@ -3704,7 +3692,7 @@ static ImageFrame *gr_handle_transmit_command(GraphicsCommand *cmd) {
 			frame->status = STATUS_UPLOADING_ERROR;
 			frame->uploading_failure = ERROR_CANNOT_OPEN_SHM;
 			fprintf(stderr,
-				"mmap failed for size = %ld, offset = %ld\n",
+				"mmap failed for size = %zu, offset = %zu\n",
 				size, offset);
 			close(fd);
 			return frame;
@@ -3712,7 +3700,7 @@ static ImageFrame *gr_handle_transmit_command(GraphicsCommand *cmd) {
 		close(fd);
 		// Append the data to the cache file.
 		if (gr_append_raw_data_to_file(frame,
-					       data + (cmd->offset - offset),
+					       (char *)data + (cmd->offset - offset),
 					       frame->expected_size)) {
 			frame->status = STATUS_UPLOADING_SUCCESS;
 		} else {
@@ -4317,7 +4305,7 @@ int gr_parse_command(char *buf, size_t len) {
 		cmd.payload = buf + len;
 
 	if (cmd.payload && cmd.payload[0])
-		GR_LOG("    payload size: %ld\n", strlen(cmd.payload));
+		GR_LOG("    payload size: %zu\n", strlen(cmd.payload));
 
 	if (!graphics_command_result.error)
 		gr_handle_command(&cmd);

@@ -365,7 +365,7 @@ previewimage(const Arg *arg)
 	Glyph g = getglyphat(mouse_col, mouse_row);
 	if (g.mode & ATTR_IMAGE) {
 		uint32_t image_id = tgetimgid(&g);
-		fprintf(stderr, "Clicked on placeholder %u/%u, x=%d, y=%d\n",
+		fprintf(stderr, "Clicked on placeholder %u/%u, x=%u, y=%u\n",
 			image_id, tgetimgplacementid(&g), tgetimgcol(&g),
 			tgetimgrow(&g));
 		gr_preview_image(image_id, arg->s);
@@ -378,7 +378,7 @@ showimageinfo(const Arg *arg)
 	Glyph g = getglyphat(mouse_col, mouse_row);
 	if (g.mode & ATTR_IMAGE) {
 		uint32_t image_id = tgetimgid(&g);
-		fprintf(stderr, "Clicked on placeholder %u/%u, x=%d, y=%d\n",
+		fprintf(stderr, "Clicked on placeholder %u/%u, x=%u, y=%u\n",
 			image_id, tgetimgplacementid(&g), tgetimgcol(&g),
 			tgetimgrow(&g));
 		char stcommand[256] = {0};

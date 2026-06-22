@@ -956,6 +956,8 @@ ttyread(void)
 			// buffer is limited, and we don't clean it in this
 			// loop, so at some point ttywrite will have to drop
 			// some data.
+			// cppcheck-suppress knownConditionTrueFalse ; buflen is a
+			// global modified as a side effect of twrite() above.
 			if (buflen_before_processing == buflen)
 				break;
 		}
