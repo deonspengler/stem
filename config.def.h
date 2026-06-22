@@ -110,24 +110,24 @@ float alpha_def;
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
 	/* 8 normal colors */
-        "#000000", /* black   */
-        "#d54e53", /* red     */
-        "#b9ca4a", /* green   */
-        "#e78c45", /* yellow  */
-        "#7aa6da", /* blue    */
-        "#c397d8", /* magenta */
-        "#70c0b1", /* cyan    */
-        "#a5a5a5", /* white   */
+	"#000000", /* black   */
+	"#d54e53", /* red     */
+	"#b9ca4a", /* green   */
+	"#e78c45", /* yellow  */
+	"#7aa6da", /* blue    */
+	"#c397d8", /* magenta */
+	"#70c0b1", /* cyan    */
+	"#a5a5a5", /* white   */
 
 	/* 8 bright colors */
-        "#666666", /* black   */
-        "#ff3334", /* red     */
-        "#9ec400", /* green   */
-        "#e7c547", /* yellow  */
-        "#7aa6da", /* blue    */
-        "#b777e0", /* magenta */
-        "#54ced6", /* cyan    */
-        "#e8e8e8", /* white   */
+	"#666666", /* black   */
+	"#ff3334", /* red     */
+	"#9ec400", /* green   */
+	"#e7c547", /* yellow  */
+	"#7aa6da", /* blue    */
+	"#b777e0", /* magenta */
+	"#54ced6", /* cyan    */
+	"#e8e8e8", /* white   */
 
 	[255] = 0,
 
