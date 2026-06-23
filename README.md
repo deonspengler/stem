@@ -22,6 +22,7 @@ All of this is on by default — no patches to pick, nothing to toggle:
 - **Alpha / transparency** — true background transparency, opacity set from Xresources
 - **Scrollback** — scroll through terminal history
 - **Keyboard select** — select and copy text entirely from the keyboard, vim-style
+- **Lightweight** — one small binary, linking only the standard X libraries and imlib2. It's st underneath; it stays close to st's footprint.
 
 ## Install
 
