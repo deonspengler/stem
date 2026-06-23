@@ -132,22 +132,28 @@ stem takes the opposite approach: rather than a kit to assemble, it's one curate
 
 ## FAQ
 
-**My Xresources colors/font aren't applying.**
+### My Xresources colors or font aren't applying — what's wrong?
+
 Run `xrdb ~/.Xresources` and open a *new* terminal — existing windows keep what they launched with. Make sure your login starts with the resources loaded (an `xrdb` line in `~/.xinitrc` or your compositor's startup).
 
-**Does it work on Wayland?**
+### Does it work on Wayland?
+
 Yes, through Xwayland. There's no native Wayland backend (same as upstream st).
 
-**Images won't show up.**
+### Why won't images show up?
+
 The kitty graphics protocol means stem *can* display images, but something has to send them — run a tool that emits kitty graphics escape sequences. The terminal won't render images on its own.
 
-**Do images work over SSH?**
+### Do images work over SSH?
+
 Yes, when the remote tool sends the image data inline (the normal case) — it travels in the terminal stream like any other output. Tools that instead rely on writing a local temp file won't work remotely, since the remote disk isn't yours.
 
-**How do I go back to plain st?**
+### How do I go back to plain st?
+
 Because stem `provides`/`conflicts` with `st`, just uninstall stem and install the official `st` package.
 
-**Can I still change keybindings or low-level defaults?**
+### Can I still change keybindings or low-level defaults?
+
 Yes — those live in `config.h`, edited and recompiled the usual suckless way. Only appearance is handled at runtime via Xresources.
 
 ## Contributing
