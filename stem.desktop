@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=stem
+GenericName=Terminal
+TryExec=st
+Exec=st
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=st;terminal;shell;console;command;suckless;
+Comment=stem — a curated build of the st terminal
+StartupWMClass=st-256color
