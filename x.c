@@ -2477,8 +2477,8 @@ resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst)
 
 	char fullname[256];
 	char fullclass[256];
-	char *type;
-	XrmValue ret;
+	char *type = NULL;
+	XrmValue ret = { 0, NULL };
 
 	snprintf(fullname, sizeof(fullname), "%s.%s",
 			opt_name ? opt_name : "st", name);
@@ -2486,8 +2486,8 @@ resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst)
 			opt_class ? opt_class : "St", name);
 	fullname[sizeof(fullname) - 1] = fullclass[sizeof(fullclass) - 1] = '\0';
 
-	XrmGetResource(db, fullname, fullclass, &type, &ret);
-	if (ret.addr == NULL || strncmp("String", type, 64))
+	if (!XrmGetResource(db, fullname, fullclass, &type, &ret) ||
+	    ret.addr == NULL || type == NULL || strncmp("String", type, 64))
 		return 1;
 
 	switch (rtype) {
