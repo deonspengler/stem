@@ -278,6 +278,7 @@ static double defaultfontsize = 0;
 static char *opt_class = NULL;
 static char **opt_cmd  = NULL;
 static char *opt_embed = NULL;
+static char *opt_alpha = NULL;
 static char *opt_font  = NULL;
 static char *opt_io    = NULL;
 static char *opt_line  = NULL;
@@ -2526,12 +2527,12 @@ config_init(void)
 void
 usage(void)
 {
-	die("usage: %s [-aiv] [-c class] [-f font] [-g geometry]"
-	    " [-n name] [-o file]\n"
+	die("usage: %s [-aiv] [-A alpha] [-c class] [-f font]"
+	    " [-g geometry] [-n name] [-o file]\n"
 	    "          [-T title] [-t title] [-w windowid]"
 	    " [[-e] command [args ...]]\n"
-	    "       %s [-aiv] [-c class] [-f font] [-g geometry]"
-	    " [-n name] [-o file]\n"
+	    "       %s [-aiv] [-A alpha] [-c class] [-f font]"
+	    " [-g geometry] [-n name] [-o file]\n"
 	    "          [-T title] [-t title] [-w windowid] -l line"
 	    " [stty_args ...]\n", argv0, argv0);
 }
@@ -2556,8 +2557,7 @@ main(int argc, char *argv[])
 		allowaltscreen = 0;
 		break;
 	case 'A':
-		alpha = strtof(EARGF(usage()), NULL);
-		LIMIT(alpha, 0.0, 1.0);
+		opt_alpha = EARGF(usage());
 		break;
 	case 'c':
 		opt_class = EARGF(usage());
@@ -2613,6 +2613,11 @@ run:
 		die("Can't open display\n");
 
 	config_init();
+	if (opt_alpha) {
+		/* the command line takes precedence over Xresources */
+		alpha = strtof(opt_alpha, NULL);
+		LIMIT(alpha, 0.0, 1.0);
+	}
 	cols = MAX(cols, 1);
 	rows = MAX(rows, 1);
 	tnew(cols, rows);
