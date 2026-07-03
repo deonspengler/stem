@@ -54,7 +54,8 @@ typedef struct {
 enum resource_type {
 	STRING = 0,
 	INTEGER = 1,
-	FLOAT = 2
+	FLOAT = 2,
+	DOUBLE = 3
 };
 
 typedef struct {
@@ -2471,6 +2472,7 @@ resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst)
 	char **sdst = dst;
 	int *idst = dst;
 	float *fdst = dst;
+	double *ddst = dst;
 
 	char fullname[256];
 	char fullclass[256];
@@ -2496,6 +2498,9 @@ resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst)
 		break;
 	case FLOAT:
 		*fdst = strtof(ret.addr, NULL);
+		break;
+	case DOUBLE:
+		*ddst = strtod(ret.addr, NULL);
 		break;
 	}
 	return 0;
