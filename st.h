@@ -78,6 +78,7 @@ typedef uint_least32_t Rune;
 typedef struct {
 	Rune u;           /* character code */
 	ushort mode;      /* attribute flags */
+	uint16_t link;    /* hyperlink id, 0 = none (fills the padding hole) */
 	uint32_t fg;      /* foreground  */
 	uint32_t bg;      /* background  */
 	uint32_t decor;   /* decoration (like underline) */
@@ -126,6 +127,8 @@ int selected(int, int);
 char *getsel(void);
 
 Glyph getglyphat(int, int);
+const char *tlinkurl(uint16_t);
+uint16_t tlinkregion(int, int, int *, int *, int *, int *);
 
 size_t utf8encode(Rune, char *);
 

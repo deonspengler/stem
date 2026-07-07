@@ -20,6 +20,7 @@
 #include <X11/X.h>
 
 #include "st.h"
+#include "khash.h"
 #include "win.h"
 #include "graphics.h"
 
@@ -201,6 +202,45 @@ static void osc_color_response(int, int, int);
 static int eschandle(uchar);
 static void strdump(void);
 static void strhandle(void);
+
+/* OSC 8 hyperlinks: ids are 16-bit indices into a URL table, deduplicated
+ * with a string hash map. Id 0 means "no link". The table lives until exit
+ * so links in the scrollback stay valid. */
+KHASH_MAP_INIT_STR(hlinks, uint16_t)
+static khash_t(hlinks) *hlinktab;
+static char **hlinkurls;
+static size_t hlinklen, hlinkcap;
+
+static uint16_t
+hlinkid(const char *url)
+{
+	khiter_t k;
+	int absent;
+	char *dup;
+
+	if (!hlinktab)
+		hlinktab = kh_init(hlinks);
+	k = kh_get(hlinks, hlinktab, url);
+	if (k != kh_end(hlinktab))
+		return kh_val(hlinktab, k);
+	if (hlinklen >= UINT16_MAX)
+		return 0; /* table full; drop tracking for new URLs */
+	if (hlinklen >= hlinkcap) {
+		hlinkcap = hlinkcap ? hlinkcap * 2 : 64;
+		hlinkurls = xrealloc(hlinkurls, hlinkcap * sizeof(char *));
+	}
+	dup = xstrdup((char *)url);
+	hlinkurls[hlinklen++] = dup;
+	k = kh_put(hlinks, hlinktab, dup, &absent);
+	kh_val(hlinktab, k) = (uint16_t)hlinklen;
+	return (uint16_t)hlinklen;
+}
+
+const char *
+tlinkurl(uint16_t id)
+{
+	return (id && id <= hlinklen) ? hlinkurls[id - 1] : NULL;
+}
 static void strparse(void);
 static void strreset(void);
 
@@ -1544,6 +1584,7 @@ tclearglyph(Glyph *gp, int usecurattr)
 		gp->decor = DECOR_DEFAULT_COLOR;
 	}
 	gp->mode = ATTR_NULL;
+	gp->link = 0;
 	gp->u = ' ';
 }
 
@@ -1598,6 +1639,7 @@ void tcreateimgplaceholder(uint32_t image_id, uint32_t placement_id, int cols,
 				text_underneath[cols * row + col] = *to_save;
 			}
 			gp->mode = ATTR_IMAGE;
+			gp->link = 0;
 			gp->u = 0;
 			tsetimgrow(gp, row + 1);
 			tsetimgcol(gp, col + 1);
@@ -2422,6 +2464,24 @@ strhandle(void)
 				        osc_table[j].str, p);
 			} else {
 				tfulldirt();
+			}
+			return;
+		case 8: /* hyperlink: OSC 8 ; params ; URI ST */
+			if (narg >= 3) {
+				/*
+				 * The URI may itself contain ';' which
+				 * strparse turned into NULs; restore them so
+				 * args[2] spans to the end of the sequence.
+				 */
+				char *uri = strescseq.args[2];
+				char *end = strescseq.buf + strescseq.len;
+				char *q;
+				for (q = uri; q < end; q++)
+					if (*q == '\0')
+						*q = ';';
+				term.c.attr.link = *uri ? hlinkid(uri) : 0;
+			} else {
+				term.c.attr.link = 0;
 			}
 			return;
 		case 4: /* color set */
@@ -3438,6 +3498,57 @@ getglyphat(int col, int row)
 	LIMIT(row, 0, term.row - 1);
 	/* Respect the scrollback offset so previews match what is drawn. */
 	return TLINE(row)[col];
+}
+
+/*
+ * Compute the contiguous region of the link occurrence at (col, row) in
+ * screen coordinates, following wrapped lines in both directions, so that
+ * only the occurrence under the pointer is highlighted even when the same
+ * URL appears elsewhere on the screen. Returns the link id, or 0.
+ */
+uint16_t
+tlinkregion(int col, int row, int *r1, int *c1, int *r2, int *c2)
+{
+	uint16_t id;
+	int x, y;
+
+	LIMIT(col, 0, term.col - 1);
+	LIMIT(row, 0, term.row - 1);
+	if (!(id = TLINE(row)[col].link))
+		return 0;
+
+	/* extend left, climbing across wrapped line boundaries */
+	x = col, y = row;
+	for (;;) {
+		while (x > 0 && TLINE(y)[x-1].link == id)
+			x--;
+		if (x == 0 && y > 0 &&
+		    (TLINE(y-1)[term.col-1].mode & ATTR_WRAP) &&
+		    TLINE(y-1)[term.col-1].link == id) {
+			y--;
+			x = term.col - 1;
+			continue;
+		}
+		break;
+	}
+	*r1 = y, *c1 = x;
+
+	/* extend right, descending across wrapped line boundaries */
+	x = col, y = row;
+	for (;;) {
+		while (x < term.col-1 && TLINE(y)[x+1].link == id)
+			x++;
+		if (x == term.col-1 && y < term.row-1 &&
+		    (TLINE(y)[x].mode & ATTR_WRAP) &&
+		    TLINE(y+1)[0].link == id) {
+			y++;
+			x = 0;
+			continue;
+		}
+		break;
+	}
+	*r2 = y, *c2 = x;
+	return id;
 }
 
 void set_notifmode(int type, KeySym ksym) {

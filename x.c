@@ -81,6 +81,12 @@ static void ttysend(const Arg *);
 static void chgalpha(const Arg *);
 static void resetalpha(const Arg *);
 static void previewimage(const Arg *);
+static void openlink(const Arg *);
+static void linkhover(int, int, uint);
+static void linkhoverquery(void);
+static void linkhoverclear(void);
+static void krelease(XEvent *);
+static void leave(XEvent *);
 static void showimageinfo(const Arg *);
 static void togglegrdebug(const Arg *);
 static void dumpgrstate(const Arg *);
@@ -243,6 +249,8 @@ static void (*handler[LASTEvent])(XEvent *) = {
  * for the selection retrieval.
  */
 	[PropertyNotify] = propnotify,
+	[KeyRelease] = krelease,
+	[LeaveNotify] = leave,
 	[SelectionRequest] = selrequest,
 };
 
@@ -286,6 +294,11 @@ static char *opt_name  = NULL;
 static char *opt_title = NULL;
 
 static uint buttons; /* bit field of pressed buttons */
+static Cursor cursor;        /* regular pointer */
+static Cursor linkcursor;    /* pointer while hovering a hyperlink */
+static uint16_t hoverlink;   /* hyperlink id currently under the pointer */
+static int hoverr1, hoverc1;  /* start of the hovered link occurrence */
+static int hoverr2, hoverc2;  /* end of the hovered link occurrence */
 
 void
 clipcopy(const Arg *dummy)
@@ -359,6 +372,23 @@ void
 ttysend(const Arg *arg)
 {
 	ttywrite(arg->s, strlen(arg->s), 1);
+}
+
+void
+openlink(const Arg *arg)
+{
+	const char *url;
+	Glyph g = getglyphat(mouse_col, mouse_row);
+
+	if (!g.link || !(url = tlinkurl(g.link)))
+		return;
+	switch (fork()) {
+	case -1:
+		return;
+	case 0:
+		execlp(urlhandler, urlhandler, url, (char *)NULL);
+		_exit(127);
+	}
 }
 
 void
@@ -813,8 +843,82 @@ brelease(XEvent *e)
 }
 
 void
+linkhover(int col, int row, uint state)
+{
+	uint16_t link = 0;
+	int r1 = 0, c1 = 0, r2 = 0, c2 = 0;
+
+	/*
+	 * Hover feedback (hand cursor + underline) only while linkmod is
+	 * held, mirroring the Ctrl+click activation gesture, and only for
+	 * the contiguous occurrence under the pointer.
+	 */
+	if ((state & linkmod) &&
+	    (!IS_SET(MODE_MOUSE) || (state & forcemousemod)))
+		link = tlinkregion(col, row, &r1, &c1, &r2, &c2);
+
+	if (link != hoverlink || r1 != hoverr1 || c1 != hoverc1 ||
+	    r2 != hoverr2 || c2 != hoverc2) {
+		hoverlink = link;
+		hoverr1 = r1, hoverc1 = c1;
+		hoverr2 = r2, hoverc2 = c2;
+		XDefineCursor(xw.dpy, xw.win, link ? linkcursor : cursor);
+		redraw();
+	}
+}
+
+/* re-evaluate hover when linkmod is pressed/released without motion */
+void
+linkhoverquery(void)
+{
+	Window rw, cw;
+	int rx, ry, wx, wy;
+	uint mask;
+	XEvent ev = {0};
+
+	if (!XQueryPointer(xw.dpy, xw.win, &rw, &cw, &rx, &ry,
+	                   &wx, &wy, &mask) ||
+	    wx < 0 || wy < 0 || wx >= win.w || wy >= win.h) {
+		linkhoverclear();
+		return;
+	}
+	ev.xbutton.x = wx;
+	ev.xbutton.y = wy;
+	linkhover(evcol(&ev), evrow(&ev), mask);
+}
+
+void
+linkhoverclear(void)
+{
+	if (!hoverlink)
+		return;
+	hoverlink = 0;
+	hoverr1 = hoverc1 = hoverr2 = hoverc2 = 0;
+	XDefineCursor(xw.dpy, xw.win, cursor);
+	redraw();
+}
+
+void
+krelease(XEvent *ev)
+{
+	KeySym ksym = XLookupKeysym(&ev->xkey, 0);
+
+	if (ksym == XK_Control_L || ksym == XK_Control_R)
+		linkhoverquery();
+}
+
+void
+leave(XEvent *ev)
+{
+	(void)ev;
+	linkhoverclear();
+}
+
+void
 bmotion(XEvent *e)
 {
+	linkhover(evcol(e), evrow(e), e->xbutton.state);
+
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
 		return;
@@ -1250,7 +1354,6 @@ void
 xinit(int cols, int rows)
 {
 	XGCValues gcvalues;
-	Cursor cursor;
 	Window parent, root;
 	pid_t thispid = getpid();
 	XColor xmousefg, xmousebg;
@@ -1298,7 +1401,8 @@ xinit(int cols, int rows)
 	xw.attrs.bit_gravity = NorthWestGravity;
 	xw.attrs.event_mask = FocusChangeMask | KeyPressMask | KeyReleaseMask
 		| ExposureMask | VisibilityChangeMask | StructureNotifyMask
-		| ButtonMotionMask | ButtonPressMask | ButtonReleaseMask;
+		| PointerMotionMask | LeaveWindowMask
+		| ButtonPressMask | ButtonReleaseMask;
 	xw.attrs.colormap = xw.cmap;
 
 	root = XRootWindow(xw.dpy, xw.scr);
@@ -1330,6 +1434,7 @@ xinit(int cols, int rows)
 
 	/* white cursor, black outline */
 	cursor = XCreateFontCursor(xw.dpy, mouseshape);
+	linkcursor = XCreateFontCursor(xw.dpy, XC_hand2);
 	XDefineCursor(xw.dpy, xw.win, cursor);
 
 	if (XParseColor(xw.dpy, xw.cmap, colorname[mousefg], &xmousefg) == 0) {
@@ -2070,6 +2175,11 @@ xdrawline(Line line, int x1, int y1, int x2)
 		new = line[x];
 		if (new.mode == ATTR_WDUMMY)
 			continue;
+		if (hoverlink && new.link == hoverlink &&
+		    y1 >= hoverr1 && y1 <= hoverr2 &&
+		    (y1 > hoverr1 || x >= hoverc1) &&
+		    (y1 < hoverr2 || x <= hoverc2))
+			new.mode |= ATTR_UNDERLINE;
 		if (selected(x, y1))
 			new.mode ^= ATTR_REVERSE;
 		if (i > 0 && ATTRCMP(base, new)) {
@@ -2137,8 +2247,11 @@ unmap(XEvent *ev)
 void
 xsetpointermotion(int set)
 {
-	MODBIT(xw.attrs.event_mask, set, PointerMotionMask);
-	XChangeWindowAttributes(xw.dpy, xw.win, CWEventMask, &xw.attrs);
+	/*
+	 * PointerMotionMask is permanently enabled for hyperlink hover
+	 * detection, so there is nothing to toggle here anymore.
+	 */
+	(void)set;
 }
 
 void
@@ -2199,6 +2312,7 @@ focus(XEvent *ev)
 		win.mode &= ~MODE_FOCUSED;
 		if (IS_SET(MODE_FOCUS))
 			ttywrite("\033[O", 3, 0);
+		linkhoverclear();
 	}
 }
 
@@ -2266,6 +2380,9 @@ kpress(XEvent *ev)
 	} else {
 		len = XLookupString(e, buf, sizeof buf, &ksym, NULL);
 	}
+
+	if (ksym == XK_Control_L || ksym == XK_Control_R)
+		linkhoverquery();
 
 	if ( IS_SET(MODE_KBDSELECT) ) {
 		if ( match(XK_NO_MOD, e->state) ||

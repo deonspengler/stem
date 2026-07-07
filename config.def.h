@@ -168,6 +168,14 @@ static unsigned int rows = 24;
  * Default colour and shape of the mouse cursor
  */
 static unsigned int mouseshape = XC_xterm;
+
+/* command used to open hyperlinks (OSC 8) on Ctrl+click */
+static char *urlhandler = "xdg-open";
+/*
+ * modifier that must be held for hyperlink hover feedback (hand cursor and
+ * underline); keep in sync with the openlink entry in mshortcuts below
+ */
+static uint linkmod = ControlMask;
 static unsigned int mousefg = 7;
 static unsigned int mousebg = 0;
 
@@ -253,6 +261,7 @@ static uint forcemousemod = ShiftMask;
  */
 static MouseShortcut mshortcuts[] = {
 	/* mask                 button   function        argument       release */
+	{ ControlMask,          Button1, openlink,       {.i = 0} },
 	{ TERMMOD,              Button3, previewimage,   {.s = "feh"} },
 	{ TERMMOD,              Button2, showimageinfo,  {},            1 },
 	{ XK_ANY_MOD,           Button2, selpaste,       {.i = 0},      1 },
