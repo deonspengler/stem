@@ -129,6 +129,7 @@ char *getsel(void);
 Glyph getglyphat(int, int);
 const char *tlinkurl(uint16_t);
 uint16_t tlinkregion(int, int, int *, int *, int *, int *);
+char *tdetecturl(int, int, int *, int *, int *, int *);
 
 size_t utf8encode(Rune, char *);
 
@@ -143,6 +144,8 @@ extern char *scroll;
 extern char *stty_args;
 extern char *vtiden;
 extern wchar_t *worddelimiters;
+extern char *urlschemes[];
+extern size_t urlschemeslen;
 extern int allowaltscreen;
 extern int allowwindowops;
 extern int su;

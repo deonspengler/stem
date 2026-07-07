@@ -44,6 +44,13 @@ static float chscale = 1.0;
  */
 wchar_t *worddelimiters = L" ";
 
+/*
+ * URL schemes recognized when detecting plain-text links for Ctrl+click;
+ * OSC 8 hyperlinks work regardless of this list.
+ */
+char *urlschemes[] = { "http://", "https://" };
+size_t urlschemeslen = LEN(urlschemes);
+
 /* selection timeouts (in milliseconds) */
 static unsigned int doubleclicktimeout = 300;
 static unsigned int tripleclicktimeout = 600;

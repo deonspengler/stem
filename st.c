@@ -3551,6 +3551,136 @@ tlinkregion(int col, int row, int *r1, int *c1, int *r2, int *c2)
 	return id;
 }
 
+/* characters that may appear in a URL (ASCII subset of RFC 3986) */
+static int
+isurlchar(Rune u)
+{
+	return u < 128 && (isalnum((int)u) ||
+	       strchr("-._~:/?#[]@!$&'()*+,;=%", (int)u) != NULL);
+}
+
+/* map an offset within a wrap-contiguous cell run back to screen coords */
+static void
+turlcell(int srow, int scol, int idx, int *r, int *c)
+{
+	*r = srow + (scol + idx) / term.col;
+	*c = (scol + idx) % term.col;
+}
+
+/*
+ * Detect a plain-text URL at (col, row) in screen coordinates. Unlike
+ * OSC 8 links, nothing is stored per glyph: the surrounding run of
+ * URL-permitted characters is collected on demand (following wrapped
+ * lines in both directions), a known scheme is located within it, and
+ * trailing prose punctuation and unbalanced closing parentheses are
+ * stripped. Returns the URL in a static buffer and its cell region, or
+ * NULL if the pointer is not on one.
+ */
+char *
+tdetecturl(int col, int row, int *r1, int *c1, int *r2, int *c2)
+{
+	static char buf[2048];
+	int x, y, len, click, start, end, i, opens, minlen = 0;
+	size_t j;
+
+	LIMIT(col, 0, term.col - 1);
+	LIMIT(row, 0, term.row - 1);
+	if (!isurlchar(TLINE(row)[col].u))
+		return NULL;
+
+	/* walk left to the start of the run, climbing wrapped lines */
+	x = col, y = row;
+	len = 0;
+	for (;;) {
+		while (x > 0 && len < (int)sizeof(buf) - 1 &&
+		       isurlchar(TLINE(y)[x-1].u))
+			x--, len++;
+		if (x == 0 && y > 0 && len < (int)sizeof(buf) - 1 &&
+		    (TLINE(y-1)[term.col-1].mode & ATTR_WRAP) &&
+		    isurlchar(TLINE(y-1)[term.col-1].u)) {
+			y--;
+			x = term.col - 1;
+			len++;
+			continue;
+		}
+		break;
+	}
+	click = len; /* offset of the clicked cell within the run */
+
+	/* collect the run forward from (y, x), descending wrapped lines */
+	{
+		int cx = x, cy = y;
+		len = 0;
+		for (;;) {
+			while (cx < term.col && len < (int)sizeof(buf) - 1 &&
+			       isurlchar(TLINE(cy)[cx].u)) {
+				buf[len++] = (char)TLINE(cy)[cx].u;
+				cx++;
+			}
+			if (cx == term.col && cy < term.row-1 &&
+			    len < (int)sizeof(buf) - 1 &&
+			    (TLINE(cy)[term.col-1].mode & ATTR_WRAP) &&
+			    isurlchar(TLINE(cy+1)[0].u)) {
+				cy++;
+				cx = 0;
+				continue;
+			}
+			break;
+		}
+		buf[len] = '\0';
+	}
+
+	/* find the last known scheme starting at or before the click */
+	start = -1;
+	{
+		size_t schemelen = 0;
+		for (i = 0; i <= click; i++) {
+			for (j = 0; j < urlschemeslen; j++) {
+				size_t sl = strlen(urlschemes[j]);
+				if (strncmp(buf + i, urlschemes[j], sl) == 0) {
+					start = i;
+					schemelen = sl;
+					break;
+				}
+			}
+		}
+		if (start < 0)
+			return NULL;
+		minlen = (int)schemelen;
+	}
+
+	/* strip trailing prose punctuation and unbalanced ')' */
+	end = len;
+	for (;;) {
+		if (end > start && strchr(".,;:!?\"'", buf[end-1])) {
+			end--;
+			continue;
+		}
+		if (end > start && buf[end-1] == ')') {
+			opens = 0;
+			for (i = start; i < end - 1; i++) {
+				if (buf[i] == '(')
+					opens++;
+				else if (buf[i] == ')')
+					opens--;
+			}
+			if (opens <= 0) {
+				end--;
+				continue;
+			}
+		}
+		break;
+	}
+	/* the click must land inside the URL proper */
+	if (click < start || click >= end || end - start <= minlen)
+		return NULL;
+
+	buf[end] = '\0';
+	turlcell(y, x, start, r1, c1);
+	turlcell(y, x, end - 1, r2, c2);
+	return buf + start;
+}
+
 void set_notifmode(int type, KeySym ksym) {
 	static char *lib[] = { " MOVE ", " SEL  "};
 	static Glyph *g, *deb, *fin;

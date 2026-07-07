@@ -296,7 +296,7 @@ static char *opt_title = NULL;
 static uint buttons; /* bit field of pressed buttons */
 static Cursor cursor;        /* regular pointer */
 static Cursor linkcursor;    /* pointer while hovering a hyperlink */
-static uint16_t hoverlink;   /* hyperlink id currently under the pointer */
+static int hoveractive;       /* a link (OSC 8 or detected URL) is hovered */
 static int hoverr1, hoverc1;  /* start of the hovered link occurrence */
 static int hoverr2, hoverc2;  /* end of the hovered link occurrence */
 
@@ -378,9 +378,11 @@ void
 openlink(const Arg *arg)
 {
 	const char *url;
+	int d1, d2, d3, d4;
 	Glyph g = getglyphat(mouse_col, mouse_row);
 
-	if (!g.link || !(url = tlinkurl(g.link)))
+	if (!(url = tlinkurl(g.link)) &&
+	    !(url = tdetecturl(mouse_col, mouse_row, &d1, &d2, &d3, &d4)))
 		return;
 	switch (fork()) {
 	case -1:
@@ -845,24 +847,28 @@ brelease(XEvent *e)
 void
 linkhover(int col, int row, uint state)
 {
-	uint16_t link = 0;
+	int active = 0;
 	int r1 = 0, c1 = 0, r2 = 0, c2 = 0;
 
 	/*
 	 * Hover feedback (hand cursor + underline) only while linkmod is
 	 * held, mirroring the Ctrl+click activation gesture, and only for
-	 * the contiguous occurrence under the pointer.
+	 * the contiguous occurrence under the pointer. OSC 8 links take
+	 * priority; otherwise a plain-text URL is detected on demand.
 	 */
 	if ((state & linkmod) &&
-	    (!IS_SET(MODE_MOUSE) || (state & forcemousemod)))
-		link = tlinkregion(col, row, &r1, &c1, &r2, &c2);
+	    (!IS_SET(MODE_MOUSE) || (state & forcemousemod))) {
+		if (tlinkregion(col, row, &r1, &c1, &r2, &c2) ||
+		    tdetecturl(col, row, &r1, &c1, &r2, &c2))
+			active = 1;
+	}
 
-	if (link != hoverlink || r1 != hoverr1 || c1 != hoverc1 ||
+	if (active != hoveractive || r1 != hoverr1 || c1 != hoverc1 ||
 	    r2 != hoverr2 || c2 != hoverc2) {
-		hoverlink = link;
+		hoveractive = active;
 		hoverr1 = r1, hoverc1 = c1;
 		hoverr2 = r2, hoverc2 = c2;
-		XDefineCursor(xw.dpy, xw.win, link ? linkcursor : cursor);
+		XDefineCursor(xw.dpy, xw.win, active ? linkcursor : cursor);
 		redraw();
 	}
 }
@@ -890,9 +896,9 @@ linkhoverquery(void)
 void
 linkhoverclear(void)
 {
-	if (!hoverlink)
+	if (!hoveractive)
 		return;
-	hoverlink = 0;
+	hoveractive = 0;
 	hoverr1 = hoverc1 = hoverr2 = hoverc2 = 0;
 	XDefineCursor(xw.dpy, xw.win, cursor);
 	redraw();
@@ -2175,7 +2181,7 @@ xdrawline(Line line, int x1, int y1, int x2)
 		new = line[x];
 		if (new.mode == ATTR_WDUMMY)
 			continue;
-		if (hoverlink && new.link == hoverlink &&
+		if (hoveractive &&
 		    y1 >= hoverr1 && y1 <= hoverr2 &&
 		    (y1 > hoverr1 || x >= hoverc1) &&
 		    (y1 < hoverr2 || x <= hoverc2))
