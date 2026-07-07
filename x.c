@@ -1639,7 +1639,80 @@ xdrawunderdashed(Draw draw, Color *color, int x, int y, int w,
 	}
 }
 
-/* Draws an undercurl. `h` is the total height, including line thickness. */
+/*
+ * Anti-aliased undercurl. One period of a cosine wave is rendered into an
+ * A8 alpha mask (per-pixel coverage computed from the distance to the
+ * curve), cached until the metrics change, tiled with RepeatNormal and
+ * composited in the decoration color. Falls back to the legacy zig-zag
+ * when the XftDraw has no Render picture.
+ */
+static struct {
+	Picture pict;
+	Pixmap pm;
+	int w, h, thick;
+} curlmask;
+
+static Picture
+xcurlmask(int w, int h, int thick)
+{
+	unsigned char *data;
+	XImage *img;
+	GC gc;
+	XRenderPictureAttributes pa = { .repeat = RepeatNormal };
+	double amp, mid, halfw;
+	int px, py;
+
+	if (curlmask.pict && curlmask.w == w && curlmask.h == h &&
+	    curlmask.thick == thick)
+		return curlmask.pict;
+	if (curlmask.pict) {
+		XRenderFreePicture(xw.dpy, curlmask.pict);
+		XFreePixmap(xw.dpy, curlmask.pm);
+		curlmask.pict = 0;
+	}
+
+	data = xmalloc((size_t)w * h);
+	amp = (h - thick) / 2.0;
+	mid = h / 2.0;
+	halfw = thick / 2.0;
+	for (py = 0; py < h; py++) {
+		for (px = 0; px < w; px++) {
+			double cx = px + 0.5, cy = py + 0.5;
+			double mind = 1e9, t, cov;
+			/*
+			 * Distance from the pixel center to the curve,
+			 * sampled densely; the cosine is periodic so
+			 * sampling past the tile edges keeps the seam
+			 * between repeats perfectly continuous.
+			 */
+			for (t = cx - h - 1; t <= cx + h + 1; t += 0.25) {
+				double wy = mid + amp * cos(2 * M_PI * t / w);
+				double dx = t - cx, dy = wy - cy;
+				double d = sqrt(dx * dx + dy * dy);
+				if (d < mind)
+					mind = d;
+			}
+			cov = halfw + 0.5 - mind;
+			cov = cov < 0 ? 0 : cov > 1 ? 1 : cov;
+			data[py * w + px] = (unsigned char)(cov * 255.0 + 0.5);
+		}
+	}
+
+	curlmask.pm = XCreatePixmap(xw.dpy, XftDrawDrawable(xw.draw), w, h, 8);
+	img = XCreateImage(xw.dpy, NULL, 8, ZPixmap, 0, (char *)data,
+	                   w, h, 8, w);
+	gc = XCreateGC(xw.dpy, curlmask.pm, 0, NULL);
+	XPutImage(xw.dpy, curlmask.pm, gc, img, 0, 0, 0, 0, w, h);
+	XFreeGC(xw.dpy, gc);
+	XDestroyImage(img); /* also frees data */
+	curlmask.pict = XRenderCreatePicture(xw.dpy, curlmask.pm,
+			XRenderFindStandardFormat(xw.dpy, PictStandardA8),
+			CPRepeat, &pa);
+	curlmask.w = w, curlmask.h = h, curlmask.thick = thick;
+	return curlmask.pict;
+}
+
+/* Legacy aliased zig-zag, kept as a fallback without Render. */
 static void
 xdrawundercurl(Draw draw, Color *color, int x, int y, int w, int h, int thick)
 {
@@ -1865,9 +1938,30 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 			xdrawunderdashed(xw.draw, &decor, winx, liney, width,
 					 wavelen, 0.65, thick);
 		} else if (style == UNDERLINE_CURLY) {
+			int period = MAX(2, win.cw);
+			Picture dst = XftDrawPicture(xw.draw);
+			Picture mask = dst ?
+				xcurlmask(period, curlh, thick) : 0;
 			liney -= MAX(0, liney + curlh - (winy + win.ch));
-			xdrawundercurl(xw.draw, &decor, winx, liney, width,
-				       curlh, thick);
+			if (dst && mask) {
+				XRenderColor c = decor.color;
+				Picture solid;
+				c.alpha = 0xffff;
+				solid = XRenderCreateSolidFill(xw.dpy, &c);
+				/*
+				 * The mask offset anchors the wave phase to
+				 * the global column grid so adjacent runs
+				 * join seamlessly.
+				 */
+				XRenderComposite(xw.dpy, PictOpOver, solid,
+					mask, dst, 0, 0,
+					(winx - win.hborderpx) % period, 0,
+					winx, liney, width, curlh);
+				XRenderFreePicture(xw.dpy, solid);
+			} else {
+				xdrawundercurl(xw.draw, &decor, winx, liney,
+					       width, curlh, thick);
+			}
 		} else {
 			XftDrawRect(xw.draw, &decor, winx, liney, width, thick);
 		}

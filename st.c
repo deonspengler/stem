@@ -174,6 +174,7 @@ typedef struct {
 	size_t len;            /* raw string length */
 	char priv;
 	int arg[ESC_ARG_SIZ];
+	int carg[ESC_ARG_SIZ]; /* 1 if the arg was introduced by ':' */
 	int narg;              /* nb of args */
 	char mode[2];
 } CSIEscape;
@@ -285,7 +286,7 @@ static void tfulldirt(void);
 static void tcontrolcode(uchar );
 static void tdectest(char );
 static void tdefutf8(char);
-static int32_t tdefcolor(const int *, int *, int);
+static int32_t tdefcolor(const int *, const int *, int *, int);
 static void tdeftran(char);
 static void tstrsequence(uchar);
 
@@ -1467,7 +1468,7 @@ csiparse(void)
 {
 	char *p = csiescseq.buf, *np;
 	long int v;
-	int sep = ';'; /* colon or semi-colon, but not both */
+	int colon = 0;
 
 	csiescseq.narg = 0;
 	if (*p == '?') {
@@ -1483,12 +1484,17 @@ csiparse(void)
 			v = 0;
 		if (v == LONG_MAX || v == LONG_MIN)
 			v = -1;
+		csiescseq.carg[csiescseq.narg] = colon;
 		csiescseq.arg[csiescseq.narg++] = v;
 		p = np;
-		if (sep == ';' && *p == ':')
-			sep = ':'; /* allow override to colon once */
-		if (*p != sep || csiescseq.narg == ESC_ARG_SIZ)
+		/*
+		 * Both separators may appear in one sequence
+		 * (e.g. CSI 4:3;58:5:196 m); remember per argument whether
+		 * it was attached as a colon subparameter.
+		 */
+		if ((*p != ';' && *p != ':') || csiescseq.narg == ESC_ARG_SIZ)
 			break;
+		colon = (*p == ':');
 		p++;
 	}
 	csiescseq.mode[0] = *p++;
@@ -1753,13 +1759,32 @@ tdeleteline(int n)
 }
 
 int32_t
-tdefcolor(const int *attr, int *npar, int l)
+tdefcolor(const int *attr, const int *carg, int *npar, int l)
 {
 	int32_t idx = -1;
 	uint r, g, b;
+	int n = *npar, sub = 0, ofs = 0;
 
-	switch (attr[*npar + 1]) {
+	/* number of contiguous colon subparameters following attr[n] */
+	while (n + 1 + sub < l && carg[n + 1 + sub])
+		sub++;
+
+	switch (attr[n + 1]) {
 	case 2: /* direct color in RGB space */
+		/*
+		 * The ITU-T colon form carries a colorspace id:
+		 * 38:2:<colorspace>:R:G:B. Skip that slot when the
+		 * subparameter count says it is present.
+		 */
+		ofs = (sub >= 5) ? 1 : 0;
+		/* a colon group must carry all of its subparameters */
+		if (sub > 0 && sub < 4 + ofs) {
+			fprintf(stderr,
+				"erresc(38): Incorrect number of parameters (%d)\n",
+				n);
+			break;
+		}
+		*npar += ofs;
 		if (*npar + 4 >= l) {
 			fprintf(stderr,
 				"erresc(38): Incorrect number of parameters (%d)\n",
@@ -1835,7 +1860,13 @@ tsetattr(const int *attr, int l)
 			break;
 		case 4:
 			term.c.attr.mode |= ATTR_UNDERLINE;
-			if (i + 1 < l) {
+			tsetdecorstyle(&term.c.attr, UNDERLINE_STRAIGHT);
+			/*
+			 * A style is only carried as a colon subparameter
+			 * (CSI 4:3 m); a following semicolon argument is an
+			 * independent attribute and must not be consumed.
+			 */
+			if (i + 1 < l && csiescseq.carg[i + 1]) {
 				idx = attr[++i];
 				if (BETWEEN(idx, 1, 5)) {
 					tsetdecorstyle(&term.c.attr, idx);
@@ -1887,21 +1918,21 @@ tsetattr(const int *attr, int l)
 			term.c.attr.mode &= ~ATTR_STRUCK;
 			break;
 		case 38:
-			if ((idx = tdefcolor(attr, &i, l)) >= 0)
+			if ((idx = tdefcolor(attr, csiescseq.carg, &i, l)) >= 0)
 				term.c.attr.fg = idx;
 			break;
 		case 39: /* set foreground color to default */
 			term.c.attr.fg = defaultfg;
 			break;
 		case 48:
-			if ((idx = tdefcolor(attr, &i, l)) >= 0)
+			if ((idx = tdefcolor(attr, csiescseq.carg, &i, l)) >= 0)
 				term.c.attr.bg = idx;
 			break;
 		case 49: /* set background color to default */
 			term.c.attr.bg = defaultbg;
 			break;
 		case 58:
-			if ((idx = tdefcolor(attr, &i, l)) >= 0)
+			if ((idx = tdefcolor(attr, csiescseq.carg, &i, l)) >= 0)
 				tsetdecorcolor(&term.c.attr, idx);
 			break;
 		case 59:
